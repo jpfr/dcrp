@@ -8,7 +8,7 @@ using namespace arma;
 
 /* Bayes Update */
 template<typename T>
-void update(Hypotheses<T> *h, double (*likelihood)(T *hypo, T *data), T *data) {
+void update(Distribution<T> *h, double (*likelihood)(T *hypo, T *data), T *data) {
 	Col<T> *c = h->candidates;
 	vec *p = h->probs;
 	int l = h->probs.n_elem;
@@ -20,7 +20,7 @@ void update(Hypotheses<T> *h, double (*likelihood)(T *hypo, T *data), T *data) {
 
 /* Expectated value */
 template<typename T>
-double E(Hypotheses<T> *h, double (*val)(T *hypo)) {
+double E(Distribution<T> *h, double (*val)(T *hypo)) {
 	double e = 0.0;
 	vec *p = h->probs;
 	Col<T> *c = h->candidates;
@@ -92,15 +92,17 @@ vec belief_update(const vec* initial_belief, const mat *im, int improvement) {
 
 int best_action(const vec *O, const mat *ims, uint periods, double *best_action_value) {
 	int best_action = -1;
-	*best_action_value = -1000000.0;
+	double bav = -100000.0;
 
 	for(int a=0;a<action_count;a++) {
 		double action_value = V_static(O, &ims[a], periods) - (a * server_cost * periods);
-		if(action_value > *best_action_value) {
+		if(action_value > bav) {
 			best_action = a;
-			*best_action_value = action_value;
+			bav = action_value;
 		}
 	}
+	if(best_action_value != NULL)
+		*best_action_value = bav;
 	return best_action;
 }
 
@@ -123,7 +125,7 @@ double V_static(const vec *O, const mat *im, uint period) {
 	return value + V_static(&Oprime, im, period-1);
 }
 
-double V_static_MC(Hypotheses<double> *hypos, mat *im, int servers, uint period) {
+double V_static_MC(Distribution<double> *hypos, mat *im, int servers, uint period) {
 	srand (time(NULL));
 	int N = 10000000;
 	//vec final_os = zeros<vec>(hypos->probs->n_elem);
@@ -146,10 +148,10 @@ double V_static_MC(Hypotheses<double> *hypos, mat *im, int servers, uint period)
 }
 
 /* Recomputes a new server amount after every observation (improvement) */
-double V_dynamic_MC(const vec *orig_belief, const mat *ims, uint period) {
+vec V_repeated_MC(const vec *orig_belief, const mat *ims, uint period) {
 	srand (time(NULL));
-	int N = 1000;
-	double total_value = 0.0;
+	int N = 500;
+	vec results = vec(N);
 	double dummy_value;
 	const vec *belief = orig_belief;
 	vec new_belief;
@@ -157,17 +159,19 @@ double V_dynamic_MC(const vec *orig_belief, const mat *ims, uint period) {
 	for(int n=0;n<N;n++) {
 		int o_pos = random_draw(orig_belief->memptr(), orig_belief->n_elem);
 		belief = orig_belief;
+		double value = 0.0;
 		for(int p=period;p>0;p--) {
 			int action = best_action(belief, ims, p, &dummy_value);
-			total_value -= server_cost * action;
+			value -= server_cost * action;
 			int improvement = random_draw(ims[action].colptr(o_pos), ims[action].n_rows);
-			total_value += improvement;
+			value += improvement;
 			o_pos -= improvement;
 			if(p > 1) {
 				new_belief = belief_update(belief, &ims[action], improvement);
 				belief = &new_belief;
 			}
+			results.at(n) = value;
 		}
 	}
-	return total_value/(double)N;
+	return results;
 }

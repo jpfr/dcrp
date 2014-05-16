@@ -6,18 +6,18 @@
 using namespace arma;
 
 template<typename T>
-struct Hypotheses {
+struct Distribution {
 	Col<T> *candidates;
 	vec *probs;
 };
 
 /* Bayes Update */
 template<typename T>
-void update(Hypotheses<T> *h, double (*likelihood)(T *hypo, T *data), T *data);
+void update(Distribution<T> *h, double (*likelihood)(T *hypo, T *data), T *data);
 
 /* Expectated value */
 template<typename T>
-double E(Hypotheses<T> *h, double (*val)(T *hypo));
+double E(Distribution<T> *h, double (*val)(T *hypo));
 
 /* Identity function for expectation computation */
 inline double identity(double *hypo);
@@ -31,6 +31,7 @@ inline vec cdf2pmf(const vec *cdf);
 static inline double norm_rand() {
 	return (double)rand() / RAND_MAX;
 }
+
 inline int random_draw(const double *pmf, int l) {
 	double r = norm_rand();
 	double mass = 0.0;
@@ -55,7 +56,7 @@ vec belief_update(const vec* initial_belief, const mat *im, int improvement);
 int best_action(const vec *O, const mat *ims, uint periods, double *best_action_value);
 
 double V_static(const vec *O, const mat *im, uint periods);
-double V_static_MC(Hypotheses<double> *hypos, mat *im, int servers, uint periods);
-double V_dynamic_MC(const vec *belief, const mat *im, uint periods);
+double V_static_MC(Distribution<double> *hypos, mat *im, int servers, uint periods);
+vec V_repeated_MC(const vec *belief, const mat *im, uint periods);
 
 #endif
